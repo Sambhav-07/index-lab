@@ -1,0 +1,31 @@
+ticker,company_name,sector,float_market_cap
+NVT,Nova Technologies,Information Technology,950
+ADS,Apex Digital Systems,Information Technology,780
+QNT,Quantum Networks,Information Technology,650
+CLC,CloudCore Solutions,Information Technology,520
+SMC,Silicon Matrix Corp.,Information Technology,410
+VRT,Vertex Software,Information Technology,320
+PNC,Pinnacle Financial,Financials,600
+UFG,United Financial Group,Financials,480
+NCB,National Capital Bank,Financials,370
+HBR,Harbor Insurance Group,Financials,250
+STG,Stream Global Media,Communication Services,550
+CNL,ConnectLink Networks,Communication Services,390
+DMW,Digital Media Works,Communication Services,280
+MDS,Medisphere Health,Health Care,520
+BLM,BioLife Medical,Health Care,410
+PHR,Prime Health Research,Health Care,300
+RTA,RetailAxis,Consumer Discretionary,480
+MTR,MotionDrive Motors,Consumer Discretionary,390
+LUX,Luxe Consumer Brands,Consumer Discretionary,280
+GEC,Global Engineering Corp.,Industrials,430
+ATL,Atlas Logistics,Industrials,310
+MFG,Modern Manufacturing Group,Industrials,250
+RNL,Renew Logistics & Infrastructure,Industrials,190
+GFD,GreenField Foods,Consumer Staples,300
+HGP,HomeGoods & Products,Consumer Staples,220
+PEO,Pioneer Energy,Energy,280
+SOL,Summit Oil & Logistics,Energy,200
+UTL,United Utilities Group,Utilities,180
+AMT,Apex Materials,Materials,150
+PRP,Prime Properties REIT,Real Estate,140
