@@ -73,18 +73,33 @@ class IndexCalculator:
             .reindex(columns=list(selected_tickers))
         )
 
-        if matrix.empty:
-            raise ValueError("No price observations exist in the selected date range.")
-        if len(matrix) < 2:
-            raise ValueError("At least two trading dates are required to calculate returns.")
-        if matrix.isna().any().any():
-            missing_cells = int(matrix.isna().sum().sum())
-            raise ValueError(
-                f"Selected date range contains {missing_cells} missing price observations. "
-                "Missing-data handling has not yet been applied."
-            )
+       if matrix.empty:
+    raise ValueError("No price observations exist in the selected date range.")
 
-        return matrix
+if len(matrix) < 2:
+    raise ValueError(
+        "At least two trading dates are required to calculate returns."
+    )
+
+# Record the number of missing observations before substitution.
+missing_cells = int(matrix.isna().sum().sum())
+
+# Forward-fill missing prices using the most recent valid price.
+# This results in a 0% return for a constituent on an isolated
+# missing-price date.
+if missing_cells > 0:
+    matrix = matrix.ffill()
+
+# Leading missing observations cannot be forward-filled because
+# there is no previous valid price available.
+if matrix.isna().any().any():
+    remaining_missing = int(matrix.isna().sum().sum())
+    raise ValueError(
+        f"{remaining_missing} missing price observations occur before a "
+        "valid price is available and cannot be substituted."
+    )
+
+return matrix
 
     def calculate(
         self,
