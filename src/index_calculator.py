@@ -73,7 +73,7 @@ class IndexCalculator:
             .reindex(columns=list(selected_tickers))
         )
 
-              if matrix.empty:
+                    if matrix.empty:
             raise ValueError(
                 "No price observations exist in the selected date range."
             )
