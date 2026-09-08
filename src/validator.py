@@ -68,10 +68,10 @@ def validate_price_data(prices: pd.DataFrame, selected_tickers: Sequence[str]) -
     if selected.empty:
         raise ValidationError("No price data exists for the selected tickers.")
 
-   # Missing prices are handled later in the calculation engine using
-# forward-fill. Non-positive prices remain invalid observations.
-if (selected["close_price"].dropna() <= 0).any():
-    raise ValidationError("Selected price data contains non-positive prices.")
+      # Missing prices are handled later in the calculation engine using
+    # forward-fill. Non-positive prices remain invalid observations.
+    if (selected["close_price"].dropna() <= 0).any():
+        raise ValidationError("Selected price data contains non-positive prices.")
 
-if selected.duplicated(["ticker", "date"]).any():
-    raise ValidationError("Duplicate ticker-date price observations detected.")
+    if selected.duplicated(["ticker", "date"]).any():
+        raise ValidationError("Duplicate ticker-date price observations detected.")
