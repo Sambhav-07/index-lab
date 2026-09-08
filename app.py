@@ -10,7 +10,7 @@ from src.index_service import IndexService
 from src.methodology import render_methodology
 
 st.set_page_config(
-    page_title="Index Lab",
+    page_title="Sambhav's Index Simulator",
     page_icon="◈",
     layout="wide",
     initial_sidebar_state="expanded",
