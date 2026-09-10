@@ -143,3 +143,53 @@ def test_leading_missing_price_raises_error():
             end_date="2025-01-03",
             methodology="equal",
         )
+
+
+def test_total_return_includes_dividend():
+    universe = pd.DataFrame({
+        "ticker": ["A", "B"],
+        "company_name": ["Alpha", "Beta"],
+        "sector": ["Tech", "Finance"],
+        "float_market_cap": [100, 100],
+    })
+    prices = pd.DataFrame({
+        "date": pd.to_datetime(["2025-01-01", "2025-01-02", "2025-01-01", "2025-01-02"]),
+        "ticker": ["A", "A", "B", "B"],
+        "close_price": [100, 100, 100, 100],
+    })
+    dividends = pd.DataFrame({
+        "date": pd.to_datetime(["2025-01-02"]),
+        "ticker": ["A"],
+        "dividend": [2.0],
+    })
+    result = IndexCalculator(prices, universe, dividends=dividends).calculate(
+        ["A", "B"], "2025-01-01", "2025-01-02", methodology="equal", return_type="total"
+    )
+    # A total return = 2%, B = 0%; equal-weight index return = 1%.
+    assert result.index_levels.iloc[0]["index_level"] == pytest.approx(101.0)
+    assert result.return_type == "total"
+
+
+def test_price_return_excludes_dividend():
+    universe = pd.DataFrame({"ticker": ["A"], "company_name": ["Alpha"], "sector": ["Tech"], "float_market_cap": [100]})
+    prices = pd.DataFrame({
+        "date": pd.to_datetime(["2025-01-01", "2025-01-02"]),
+        "ticker": ["A", "A"],
+        "close_price": [100, 100],
+    })
+    dividends = pd.DataFrame({"date": pd.to_datetime(["2025-01-02"]), "ticker": ["A"], "dividend": [2.0]})
+    result = IndexCalculator(prices, universe, dividends=dividends).calculate(
+        ["A"], "2025-01-01", "2025-01-02", methodology="equal", return_type="price"
+    )
+    assert result.index_levels.iloc[0]["index_level"] == pytest.approx(100.0)
+
+
+def test_cumulative_return_matches_index_level():
+    universe = pd.DataFrame({"ticker": ["A"], "company_name": ["Alpha"], "sector": ["Tech"], "float_market_cap": [100]})
+    prices = pd.DataFrame({
+        "date": pd.to_datetime(["2025-01-01", "2025-01-02", "2025-01-03"]),
+        "ticker": ["A", "A", "A"],
+        "close_price": [100, 110, 121],
+    })
+    result = IndexCalculator(prices, universe).calculate(["A"], "2025-01-01", "2025-01-03")
+    assert result.index_levels.iloc[-1]["index_level"] / result.base_level - 1 == pytest.approx(0.21)
