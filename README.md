@@ -1,416 +1,260 @@
-# Index Lab
+# Index Lab — Custom Equity Index Builder
 
-## Custom Equity Index Builder
+Index Lab is a Streamlit-based analytical application for constructing and analysing a custom **30-stock synthetic equity index**. It demonstrates constituent selection, fixed weighting methodologies, daily return aggregation, index-level calculation, validation, missing-price handling, and both **Price Return** and **Total Return** index conventions.
 
-Index Lab is a web-based analytical application that allows users to construct and analyse a custom dummy equity index. Users can select stocks from a predefined universe, choose a weighting methodology, select a date range, and generate a Price Return Index.
-
-The application demonstrates index calculation, data validation, weighting methodologies, modular software architecture, and analytical visualization.
-
----
+> **Important:** All companies, prices, float market capitalisations, and dividend observations are fictional/synthetic and are used only for demonstration.
 
 ## Features
 
-The application allows users to:
-
-- View a predefined universe of 30 dummy stocks.
-- Select one or more stocks for index construction.
-- Select a date range from the available price data.
-- Choose from multiple weighting methodologies:
-  - Equal Weighting
-  - Float Market Capitalisation Weighting
-  - Custom Weighting
-- Generate a Price Return Index.
-- View index performance over time.
+- Select constituents from a predefined 30-stock synthetic universe.
+- Choose a historical date range.
+- Choose one of three fixed weighting methodologies:
+  - Equal Weight
+  - Float Market Capitalisation Weight
+  - Custom Weight
+- Choose a return convention:
+  - Price Return
+  - Total Return
+  - Compare Price vs Total Return
 - View index level and cumulative return.
-- Analyse sector allocation and index composition.
-- Validate user inputs and weighting constraints.
-- View methodology and calculation assumptions.
+- Compare the effect of synthetic dividends on index performance.
+- View constituent weights and sector allocation.
+- Inspect synthetic price and dividend data.
+- Validate ticker selections, dates, prices, dividends, and custom weights.
+- Demonstrate isolated missing-price handling through forward-filling.
+- Run automated unit tests with pytest.
 
----
-
-# Project Architecture
-
-The project follows a modular architecture that separates the user interface, analytical services, calculation logic, validation, and data.
+## Architecture
 
 ```text
-Streamlit User Interface
-        │
-        ▼
-    Index Service
-        │
-        ▼
-  Index Calculator
-        │
- ┌──────┴──────┐
- ▼             ▼
+Streamlit UI (app.py)
+        |
+        v
+Index Service
+        |
+        v
+Index Calculator
+   |            |
+   v            v
 Weighting    Validation
-        │
-        ▼
-   Data Layer
-        │
-        ▼
+   |
+   v
+Price / Total Return Engine
+        |
+        v
 Synthetic CSV Data
 ```
+
+The application separates presentation, service orchestration, calculation logic, validation, weighting, metrics, and data loading so that the index engine can be tested independently of Streamlit.
 
 ## Project Structure
 
 ```text
 index-lab/
-│
 ├── app.py
-├── requirements.txt
 ├── README.md
-│
+├── requirements.txt
+├── .gitignore
 ├── data/
-│
+│   ├── demo_dividends.csv
+│   ├── processed/
+│   │   ├── prices.csv
+│   │   └── universe.csv
+│   └── raw/
+│       └── stock_parameters.csv
 ├── src/
 │   ├── data_generator.py
 │   ├── data_loader.py
-│   ├── weighting.py
-│   ├── validator.py
 │   ├── index_calculator.py
 │   ├── index_service.py
+│   ├── methodology.py
 │   ├── metrics.py
-│   └── methodology.py
-│
+│   ├── validator.py
+│   └── weighting.py
 └── tests/
+    ├── test_index_calculator.py
+    └── test_weighting.py
 ```
 
----
+## Synthetic Data Model
 
-# Data
-
-The application uses synthetic but realistic equity data.
-
-## Stock Universe
-
-The universe contains 30 dummy stocks with:
-
-- Ticker
-- Company Name
-- Sector
-- Float Market Capitalisation
-
-Float market capitalisation is used for market-cap weighted index construction.
-
-## Price Data
-
-Daily close prices are generated for each stock over a consistent historical period.
-
-The price dataset contains:
-
-- Date
-- Ticker
-- Close Price
-
-The synthetic data is generated using a fixed random seed to ensure reproducibility.
-
----
-
-# Weighting Methodologies
-
-## 1. Equal Weighting
-
-Each selected stock receives the same weight:
+Daily stock log returns are generated from correlated market, sector, and idiosyncratic factors:
 
 ```text
-Weight = 1 / Number of Selected Stocks
+r_i,t = μ_i + β_i × r_market,t + λ × r_sector,t + ε_i,t
 ```
 
-For example, if five stocks are selected:
+The idiosyncratic volatility is calibrated as:
 
 ```text
-Each stock weight = 20%
+σ_idio = sqrt(σ_target² - (β × σ_market)² - (λ × σ_sector)²)
 ```
 
----
-
-## 2. Float Market Capitalisation Weighting
-
-Weights are proportional to each company's float market capitalisation:
+Prices are generated using exponential compounding:
 
 ```text
-Weight_i = Float Market Cap_i / Total Float Market Cap
+P_t = P_(t-1) × exp(r_t)
 ```
 
-Larger companies therefore receive a higher weight in the index.
+The data covers business days from **2021-01-01 to 2025-12-31** and uses random seed **42** for reproducibility.
 
----
+## Weighting Methodologies
 
-## 3. Custom Weighting
+### Equal Weight
 
-Users can assign their own weights to selected stocks.
-
-The application validates that:
-
-- No weight is negative.
-- All selected stocks have valid weights.
-- Total weights equal 100%.
-
----
-
-# Price Return Index Methodology
-
-Index Lab calculates a Price Return Index.
-
-The index does not include:
-
-- Dividends
-- Dividend reinvestment
-- Taxes
-- Transaction costs
-
-The index reflects changes in stock prices only.
-
----
-
-# Stock Returns
-
-Daily stock returns are calculated as:
+Each selected constituent receives:
 
 ```text
-r_i(t) = P_i(t) / P_i(t-1) - 1
+w_i = 1 / N
 ```
 
-Where:
-
-- `P_i(t)` = current stock price
-- `P_i(t-1)` = previous day's stock price
-
----
-
-# Index Return
-
-The index daily return is calculated using constituent weights:
+### Float Market Capitalisation Weight
 
 ```text
-r_index(t) = Σ (w_i × r_i(t))
+w_i = Float Market Cap_i / Σ Float Market Cap_j
 ```
 
-Where:
+The float market capitalisations are synthetic and static. The resulting constituent weights are fixed during the selected historical period.
 
-- `w_i` = constituent weight
-- `r_i(t)` = constituent return
+### Custom Weight
 
----
+The user assigns constituent weights manually. Weights must be non-negative and sum to 100%.
 
-# Index Level Calculation
+## Price Return Index
 
-The index begins with a base value of 100.
+The Price Return convention captures price changes only and excludes dividends.
 
-The index level evolves according to:
+Daily constituent return:
 
 ```text
-Level(t) = Level(t-1) × (1 + r_index(t))
+R_i,t(PR) = P_i,t / P_i,t-1 - 1
 ```
 
-This creates the Price Return Index series over time.
+Daily index return:
 
----
-
-# Validation
-
-The application performs validation before calculating the index.
-
-Validation checks include:
-
-- At least one stock must be selected.
-- Selected tickers must exist in the universe.
-- Duplicate ticker selections are prevented.
-- The selected date range must be valid.
-- Start date cannot be after the end date.
-- Required data columns must exist.
-- Prices must be positive.
-- Duplicate price observations are checked.
-- Market capitalisation values must be valid.
-- Custom weights cannot be negative.
-- Custom weights must sum to 100%.
-
----
-
-# Missing Data Handling
-
-The application validates the availability of price data for selected constituents.
-
-If missing or invalid data is detected, the application provides validation warnings or errors rather than silently producing an unreliable index calculation.
-
-This approach was chosen to ensure that index calculations are transparent and reproducible.
-
----
-
-# User Interface
-
-The application is built using Streamlit.
-
-Streamlit was selected because it allows Python analytical applications to be exposed through a web browser while maintaining direct integration with the backend calculation engine.
-
-The interface provides:
-
-- Index configuration controls
-- Stock selection
-- Date selection
-- Weighting methodology selection
-- Performance visualization
-- Index metrics
-- Sector allocation analysis
-- Methodology documentation
-
----
-
-# How to Run Locally
-
-## 1. Clone the Repository
-
-```bash
-git clone YOUR_REPOSITORY_URL
+```text
+R_index,t = Σ(w_i × R_i,t)
 ```
 
-Move into the project folder:
+Index level:
 
-```bash
-cd index-lab
+```text
+Index Level_t = Index Level_(t-1) × (1 + R_index,t)
 ```
 
----
+The base index level is **100**.
 
-## 2. Create a Virtual Environment
+## Total Return Index
 
-```bash
-python -m venv venv
+The application also provides a demonstration Total Return convention. It uses the separate `data/demo_dividends.csv` dataset, which contains **synthetic dividend observations**.
+
+Daily constituent total return:
+
+```text
+R_i,t(TR) = (P_i,t + D_i,t) / P_i,t-1 - 1
 ```
 
----
+where `D_i,t` is the synthetic dividend paid on date `t`. The implementation assumes the dividend is reinvested on the dividend date.
 
-## 3. Activate the Virtual Environment
+The index aggregates constituent total returns using the same fixed constituent weights:
 
-### Windows PowerShell
-
-```powershell
-.\venv\Scripts\Activate.ps1
+```text
+R_index,t(TR) = Σ(w_i × R_i,t(TR))
 ```
 
-If PowerShell blocks script execution:
+The resulting Total Return Index is compounded from the same base level of 100.
 
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+### Price Return vs Total Return
+
+The Streamlit application provides a **Compare Price vs Total Return** option. It calculates both versions using identical constituents, dates, and weighting methodology, then displays their index levels and cumulative returns side-by-side.
+
+This makes the effect of dividend income visible rather than merely describing the calculation in documentation.
+
+## Cumulative Return
+
+Cumulative return is a performance measure, not a separate return convention:
+
+```text
+Cumulative Return = Index Level_T / Index Level_0 - 1
 ```
 
-Then activate:
+For a Price Return Index, this is cumulative price performance. For a Total Return Index, it is cumulative performance including the modeled dividends.
 
-```powershell
-.\venv\Scripts\Activate.ps1
-```
+## Missing Price Handling
 
----
+Missing close prices are allowed through the initial validation layer so that the calculation engine can apply its explicit substitution policy.
 
-## 4. Install Dependencies
+- An isolated missing observation is **forward-filled using the most recent valid price**.
+- This produces a 0% constituent return for that missing-price date.
+- Leading missing observations cannot be forward-filled and therefore raise an error.
+- Non-positive prices and duplicate ticker-date observations remain invalid.
+
+The repository includes `demo_missing_data.py` to demonstrate this behaviour without modifying the production synthetic price dataset.
+
+## Validation
+
+The calculation engine validates:
+
+- At least one constituent is selected.
+- Selected tickers exist in the universe.
+- Duplicate ticker selections are rejected.
+- Start date is not after end date.
+- Requested dates are within the available dataset.
+- Required price columns exist.
+- Non-positive prices are rejected.
+- Duplicate ticker-date price observations are rejected.
+- Dividend columns, duplicate observations, missing dividend values, and negative dividends are validated.
+- Custom weights are non-negative and total 100%.
+
+## Streamlit Application
+
+The sidebar controls the complete index construction workflow:
+
+1. Select constituents.
+2. Select the historical period.
+3. Select the weighting methodology.
+4. Select Price Return, Total Return, or comparison mode.
+5. Generate the index.
+
+The Overview tab displays:
+
+- Index level
+- Cumulative return
+- Performance chart
+- Constituent weights
+- Sector allocation
+- Price Return vs Total Return comparison when selected
+
+The Data tab displays the synthetic universe and dividend observations. The Methodology tab documents the formulas and assumptions used by the application.
+
+## Running Locally
+
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
----
-
-## 5. Run Tests
-
-```bash
-pytest
-```
-
----
-
-## 6. Run the Application
+Run the Streamlit application:
 
 ```bash
 streamlit run app.py
 ```
 
-The application will open in a browser.
-
----
-
-# Testing
-
-The project includes unit tests covering key analytical components.
-
-Tests include:
-
-- Equal weighting
-- Market-cap weighting
-- Custom weighting
-- Weight validation
-- Index calculations
-
-Run tests using:
+Run the test suite:
 
 ```bash
-pytest
+pytest -q
 ```
 
----
+Regenerate the synthetic price dataset if required:
 
-# Limitations
+```bash
+python src/data_generator.py
+```
 
-This project is designed as a simplified analytical index construction exercise.
+## Design Scope and Assumptions
 
-Current limitations include:
+This project is a transparent demonstration of index-engineering concepts rather than a production benchmark methodology. It does **not** model real-world corporate actions, taxes, transaction costs, constituent reconstitution, periodic rebalancing, or real company dividends.
 
-- Synthetic rather than live market data.
-- No dividend adjustments.
-- No corporate action processing.
-- No index rebalancing methodology.
-- No transaction costs.
-- No liquidity constraints.
-- No constituent eligibility rules beyond basic validation.
-- No production database.
-- No automated data ingestion pipeline.
-
----
-
-# Future Improvements
-
-Potential future improvements include:
-
-- Integration with real market data APIs.
-- Scheduled index rebalancing.
-- Corporate action adjustments.
-- Dividend-adjusted Total Return Index calculations.
-- Index divisor methodology.
-- Liquidity and investability screens.
-- Historical rebalancing analysis.
-- Performance benchmarking against market indices.
-- Risk metrics such as volatility and drawdown.
-- Database-backed data storage.
-- User authentication and saved index configurations.
-
----
-
-# Technologies Used
-
-- Python
-- Pandas
-- NumPy
-- Streamlit
-- Plotly
-- Pytest
-
----
-
-# Design Philosophy
-
-The project was designed with separation of concerns in mind.
-
-- The Streamlit application handles presentation and user interaction.
-- The Index Service coordinates the analytical workflow.
-- The Index Calculator calculates returns and index levels.
-- Weighting modules calculate constituent weights.
-- Validation modules check user inputs and data quality.
-- The data layer manages the stock universe and price data.
-
-This structure makes the application easier to test, maintain, and extend.
-
----
-
-# Disclaimer
-
-All stocks, companies, prices, and market capitalisation values used in this project are synthetic and are intended solely for analytical and educational purposes.
+The Total Return feature is intentionally implemented with clearly labelled synthetic dividend data so the calculation and Streamlit demonstration can be evaluated without representing fictional observations as real market data.

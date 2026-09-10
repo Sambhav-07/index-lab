@@ -10,6 +10,7 @@ def calculate_summary_metrics(result: IndexResult) -> dict:
     end_level = float(levels["index_level"].iloc[-1])
     return {
         "methodology": result.methodology,
+        "return_type": result.return_type,
         "number_of_constituents": int(len(result.weights)),
         "start_date": result.start_date,
         "end_date": result.end_date,

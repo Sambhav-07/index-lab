@@ -10,7 +10,7 @@ from src.index_service import IndexService
 from src.methodology import render_methodology
 
 st.set_page_config(
-    page_title="Sambhav's Index Simulator",
+    page_title="Index Lab",
     page_icon="◈",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -100,20 +100,29 @@ def inject_css() -> None:
     )
 
 
-def build_performance_chart(levels: pd.DataFrame) -> go.Figure:
+def build_performance_chart(levels: pd.DataFrame, comparison: pd.DataFrame | None = None) -> go.Figure:
     fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=levels["date"],
-            y=levels["index_level"],
-            mode="lines",
-            line={"color": "#e6e8eb", "width": 2.5},
-            fill="tozeroy",
-            fillcolor="rgba(230,232,235,0.08)",
-            hovertemplate="<b>%{x|%A, %b %d, %Y}</b><br>Index Lab: %{y:,.2f}<extra></extra>",
-            name="Index Lab",
+    if comparison is None:
+        fig.add_trace(
+            go.Scatter(
+                x=levels["date"], y=levels["index_level"], mode="lines",
+                line={"color": "#e6e8eb", "width": 2.5},
+                fill="tozeroy", fillcolor="rgba(230,232,235,0.08)",
+                hovertemplate="<b>%{x|%A, %b %d, %Y}</b><br>Index Lab: %{y:,.2f}<extra></extra>",
+                name="Index Lab",
+            )
         )
-    )
+    if comparison is not None:
+        fig.add_trace(go.Scatter(
+            x=comparison["date"], y=comparison["price_level"], mode="lines",
+            line={"color": "#e6e8eb", "width": 2}, name="Price Return",
+            hovertemplate="<b>%{x|%A, %b %d, %Y}</b><br>Price Return: %{y:,.2f}<extra></extra>",
+        ))
+        fig.add_trace(go.Scatter(
+            x=comparison["date"], y=comparison["total_level"], mode="lines",
+            line={"color": "#d61f3a", "width": 2.5}, name="Total Return",
+            hovertemplate="<b>%{x|%A, %b %d, %Y}</b><br>Total Return: %{y:,.2f}<extra></extra>",
+        ))
     fig.update_layout(
         height=500,
         margin={"l": 20, "r": 20, "t": 20, "b": 20},
@@ -121,7 +130,8 @@ def build_performance_chart(levels: pd.DataFrame) -> go.Figure:
         plot_bgcolor="#202123",
         font={"color": "#d8dbe0"},
         hovermode="x",
-        showlegend=False,
+        showlegend=comparison is not None,
+        legend={"orientation": "h", "y": 1.08, "x": 0},
         xaxis={"showgrid": False, "zeroline": False, "linecolor": "#55585d", "tickfont": {"color": "#9ca1a8"}},
         yaxis={"gridcolor": "#34363a", "zeroline": False, "linecolor": "#55585d", "tickfont": {"color": "#9ca1a8"}, "tickformat": ",.0f"},
     )
@@ -189,6 +199,13 @@ with st.sidebar:
         "Custom Weight": "custom",
     }[method_label]
 
+    return_label = st.selectbox(
+        "Return Type",
+        ["Price Return", "Total Return", "Compare Price vs Total Return"],
+        help="Price Return excludes dividends. Total Return includes synthetic dividends assumed to be reinvested.",
+    )
+    return_type = {"Price Return": "price", "Total Return": "total"}.get(return_label)
+
     custom_values = None
     if method == "custom" and selected:
         default_weight = 100.0 / len(selected)
@@ -220,13 +237,15 @@ if generate:
             if not 99.99 <= sum(custom_values.values()) <= 100.01:
                 raise ValueError("Custom weights must total 100%.")
 
-        st.session_state.build = service.build_index(
-            selected,
-            start_date,
-            end_date,
-            method,
-            custom_values,
-        )
+        if return_label == "Compare Price vs Total Return":
+            price_build, total_build = service.build_comparison(
+                selected, start_date, end_date, method, custom_values
+            )
+            st.session_state.build = {"mode": "comparison", "price": price_build, "total": total_build}
+        else:
+            st.session_state.build = service.build_index(
+                selected, start_date, end_date, method, custom_values, return_type
+            )
     except Exception as exc:
         st.error(f"Unable to generate index: {exc}")
 
@@ -245,67 +264,93 @@ with tab_overview:
     if build is None:
         st.markdown("### Build a custom equity index")
         st.info(
-            "Select constituents, define the historical period, choose a weighting methodology, "
-            "and click **GENERATE INDEX**."
+            "Select constituents, define the historical period, choose a weighting methodology and return type, "
+            "then click **GENERATE INDEX**."
         )
+    elif isinstance(build, dict):
+        price_build = build["price"]
+        total_build = build["total"]
+        price_metrics = price_build.metrics
+        total_metrics = total_build.metrics
+        price_levels = price_build.result.index_levels.copy()
+        total_levels = total_build.result.index_levels.copy()
+        comparison = price_levels[["date", "index_level"]].rename(columns={"index_level": "price_level"}).merge(
+            total_levels[["date", "index_level"]].rename(columns={"index_level": "total_level"}), on="date", how="inner"
+        )
+        latest_date = pd.Timestamp(total_metrics["end_date"]).strftime("%b %d, %Y")
+        st.markdown('<div class="eyebrow">Price Return vs Total Return</div>', unsafe_allow_html=True)
+        st.markdown("### Index Lab Performance Comparison")
+        left, right = st.columns([1, 4], gap="large")
+        with left:
+            st.caption(f"As of {latest_date}")
+            st.metric("Price Return", f"{price_metrics['end_index_level']:,.2f}")
+            st.metric("Total Return", f"{total_metrics['end_index_level']:,.2f}")
+            st.metric("TR Dividend Impact", f"{total_metrics['cumulative_return'] - price_metrics['cumulative_return']:.2%}")
+            st.caption(f"{total_metrics['number_of_constituents']} CONSTITUENTS")
+            st.caption({"equal": "EQUAL WEIGHT", "market_cap": "FLOAT MARKET CAP", "custom": "CUSTOM"}[total_metrics["methodology"]])
+        with right:
+            st.markdown('<div class="eyebrow">Graph View</div>', unsafe_allow_html=True)
+            st.plotly_chart(build_performance_chart(total_levels, comparison), use_container_width=True)
+        st.markdown("### Return Comparison")
+        compare_df = pd.DataFrame({
+            "Metric": ["Start Level", "End Level", "Cumulative Return"],
+            "Price Return": [price_metrics["start_index_level"], price_metrics["end_index_level"], price_metrics["cumulative_return"]],
+            "Total Return": [total_metrics["start_index_level"], total_metrics["end_index_level"], total_metrics["cumulative_return"]],
+        })
+        compare_display = compare_df.copy()
+        compare_display.loc[0:1, ["Price Return", "Total Return"]] = compare_display.loc[0:1, ["Price Return", "Total Return"]].map(lambda x: f"{x:,.2f}")
+        compare_display.loc[2, ["Price Return", "Total Return"]] = compare_display.loc[2, ["Price Return", "Total Return"]].map(lambda x: f"{x:.2%}")
+        st.dataframe(compare_display, hide_index=True, use_container_width=True)
+        st.info("Total Return uses synthetic dividend observations and assumes dividends are reinvested. The dividend data is for demonstration only.")
+        table = total_build.constituent_table.copy()
+        display_table = table.copy()
+        display_table["weight_percent"] = display_table["weight_percent"].map(lambda value: f"{value:.2f}%")
+        st.markdown("### Constituent Weights")
+        st.dataframe(display_table, hide_index=True, use_container_width=True)
     else:
         metrics = build.metrics
         levels = build.result.index_levels.copy()
         levels["date"] = pd.to_datetime(levels["date"])
-
         latest = float(metrics["end_index_level"])
         cumulative = float(metrics["cumulative_return"])
         latest_date = pd.Timestamp(metrics["end_date"]).strftime("%b %d, %Y")
-
-        st.markdown('<div class="eyebrow">Price Return Index</div>', unsafe_allow_html=True)
-        st.markdown(f"### Index Lab Performance")
-
-        # S&P-style left summary / chart layout
+        return_title = "Total Return Index" if metrics["return_type"] == "total" else "Price Return Index"
+        st.markdown(f'<div class="eyebrow">{return_title}</div>', unsafe_allow_html=True)
+        st.markdown("### Index Lab Performance")
         left, right = st.columns([1, 4], gap="large")
         with left:
             st.caption(f"As of {latest_date}")
             st.metric("Index Level", f"{latest:,.2f}")
-            st.metric("Period Return", f"{cumulative:.2%}")
+            st.metric("Cumulative Return", f"{cumulative:.2%}")
             st.caption(f"{metrics['number_of_constituents']} CONSTITUENTS")
-            st.caption(method_label.upper())
-
+            st.caption({"equal": "EQUAL WEIGHT", "market_cap": "FLOAT MARKET CAP", "custom": "CUSTOM"}[metrics["methodology"]])
+            if metrics["return_type"] == "total":
+                st.caption("SYNTHETIC DIVIDENDS · REINVESTED")
         with right:
             st.markdown('<div class="eyebrow">Graph View</div>', unsafe_allow_html=True)
             st.plotly_chart(build_performance_chart(levels), use_container_width=True)
-
         st.markdown("---")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Start Level", f"{metrics['start_index_level']:,.2f}")
         c2.metric("End Level", f"{metrics['end_index_level']:,.2f}")
         c3.metric("Constituents", int(metrics["number_of_constituents"]))
-        c4.metric(
-            "Weighting",
-            {"equal": "Equal Weight", "market_cap": "Float Market Cap", "custom": "Custom"}[metrics["methodology"]],
-        )
-
+        c4.metric("Return Type", "Total Return" if metrics["return_type"] == "total" else "Price Return")
+        if metrics["return_type"] == "total":
+            st.info("Synthetic dividend data is included and assumed reinvested. It is not real-world company dividend data.")
         st.markdown("### Constituent Weights")
         table = build.constituent_table.copy()
         display_table = table.copy()
         display_table["weight_percent"] = display_table["weight_percent"].map(lambda value: f"{value:.2f}%")
         st.dataframe(display_table, hide_index=True, use_container_width=True)
-
         sector = table.groupby("sector", as_index=False)["weight"].sum()
         sector["weight_percent"] = sector["weight"] * 100
-
         chart_col, composition_col = st.columns([1.15, 1], gap="large")
         with chart_col:
             st.markdown("### Sector Allocation")
             pie = px.pie(sector, names="sector", values="weight", hole=0.58)
             pie.update_traces(textposition="inside", textinfo="percent+label")
-            pie.update_layout(
-                paper_bgcolor="#1d1e20",
-                plot_bgcolor="#1d1e20",
-                font={"color": "#d8dbe0"},
-                margin={"l": 0, "r": 0, "t": 10, "b": 10},
-                showlegend=False,
-            )
+            pie.update_layout(paper_bgcolor="#1d1e20", plot_bgcolor="#1d1e20", font={"color": "#d8dbe0"}, margin={"l": 0, "r": 0, "t": 10, "b": 10}, showlegend=False)
             st.plotly_chart(pie, use_container_width=True)
-
         with composition_col:
             st.markdown("### Index Composition")
             largest = table.iloc[0]
@@ -320,6 +365,9 @@ with tab_data:
     st.markdown("### Index Constituents")
     st.caption("All companies, prices and float market capitalizations in this application are synthetic.")
     st.dataframe(universe, hide_index=True, use_container_width=True)
+    st.markdown("### Synthetic Dividend Observations")
+    st.caption("Used only for the Total Return demonstration; these are fictional dividend amounts.")
+    st.dataframe(service.dividends.head(100), hide_index=True, use_container_width=True)
 
 with tab_methodology:
     render_methodology()
