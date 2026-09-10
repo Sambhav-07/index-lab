@@ -298,9 +298,17 @@ with tab_overview:
             "Total Return": [total_metrics["start_index_level"], total_metrics["end_index_level"], total_metrics["cumulative_return"]],
         })
         compare_display = compare_df.copy()
-        compare_display.loc[0:1, ["Price Return", "Total Return"]] = compare_display.loc[0:1, ["Price Return", "Total Return"]].map(lambda x: f"{x:,.2f}")
-        compare_display.loc[2, ["Price Return", "Total Return"]] = compare_display.loc[2, ["Price Return", "Total Return"]].map(lambda x: f"{x:.2%}")
-        st.dataframe(compare_display, hide_index=True, use_container_width=True)
+       
+        st.dataframe(
+    compare_display.style.format(
+        {
+            "Price Return": "{:,.2f}",
+            "Total Return": "{:,.2f}",
+        }
+    ),
+    hide_index=True,
+    use_container_width=True,
+)
         st.info("Total Return uses synthetic dividend observations and assumes dividends are reinvested. The dividend data is for demonstration only.")
         table = total_build.constituent_table.copy()
         display_table = table.copy()
